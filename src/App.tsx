@@ -17,6 +17,7 @@ import { Label } from "./components/ui/label";
 import { Input } from "./components/ui/input";
 import { Separator } from "./components/ui/separator";
 import { cn } from "./lib/utils";
+import { Switch } from "./components/ui/switch";
 
 interface User {
   name: string;
@@ -27,19 +28,60 @@ interface User {
   totalScore: number;
 }
 
-const getRandomWinner = (users: User[]): User => {
-  const totalScore = users.reduce((acc, user) => acc + user.totalScore, 0);
-  const random = Math.random() * totalScore;
-  let cumulativeScore = 0;
+// const getRandomWinner = (users: User[]): User => {
+//   const totalScore = users.reduce((acc, user) => acc + user.totalScore, 0);
+//   const random = Math.random() * totalScore;
+//   let cumulativeScore = 0;
 
-  for (const user of users) {
-    cumulativeScore += user.totalScore;
-    if (random < cumulativeScore) {
-      return user;
-    }
+//   for (const user of users) {
+//     cumulativeScore += user.totalScore;
+//     if (random < cumulativeScore) {
+//       return user;
+//     }
+//   }
+//   return users[0]; // Fallback, should not happen
+// };
+
+function getWeight(score: number) {
+  if (score >= 0 && score <= 100) {
+    return 1;
+  } else if (score >= 101 && score <= 200) {
+    return 5;
+  } else if (score >= 201 && score <= 300) {
+    return 10;
+  } else if (score >= 301 && score <= 400) {
+    return 20;
+  } else if (score >= 401 && score <= 500) {
+    return 40;
+  } else if (score >= 501 && score <= 600) {
+    return 70;
+  } else if (score >= 601 && score <= 700) {
+    return 100;
+  } else if (score >= 701 && score <= 800) {
+    return 200;
+  } else if (score >= 801) {
+    return 300;
+  } else {
+    return 0;
   }
-  return users[0]; // Fallback, should not happen
-};
+}
+
+// Function to generate a random winner
+function getRandomWinner(users: User[]) {
+  // Create a pool of users based on their weight
+  const weightedPool: User[] = [];
+
+  users.forEach((user) => {
+    const weight = getWeight(user.totalScore); // Calculate weight based on score
+    for (let i = 0; i < weight; i++) {
+      weightedPool.push(user);
+    }
+  });
+
+  // Select a random user from the weighted pool
+  const randomIndex = Math.floor(Math.random() * weightedPool.length);
+  return weightedPool[randomIndex];
+}
 
 const UserList: React.FC<{ users: User[] }> = ({ users }) => {
   // Function to render each row in the virtualized list
@@ -92,6 +134,7 @@ function App() {
   const [winners, setWinners] = useState<User[]>([]);
   const [title, setTitle] = useState("Undian Pemenang Doorprize INAHEF 2024");
   const [users, setUsers] = useState<User[]>([]);
+  const [showScore, setShowScore] = useState(false);
 
   // Load winners from localStorage when the app starts
   useEffect(() => {
@@ -100,6 +143,19 @@ function App() {
       setWinners(JSON.parse(savedWinners));
     }
   }, []);
+
+  useEffect(() => {
+    const savedUsers = localStorage.getItem("users");
+    if (savedUsers) {
+      setUsers(JSON.parse(savedUsers));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      localStorage.setItem("users", JSON.stringify(users));
+    }
+  }, [users]);
 
   useEffect(() => {
     if (winners.length > 0) {
@@ -152,6 +208,17 @@ function App() {
     }
   };
 
+  const clearUsers = () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to clear all users?"
+    );
+    if (confirmed) {
+      setUsers([]);
+      setState("idle");
+      localStorage.removeItem("users");
+    }
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -184,7 +251,7 @@ function App() {
 
   return (
     <div className="flex h-screen">
-      <div className="flex-1 place-content-center relative bg-accent">
+      <div className="flex-1 place-content-center relative bg-accent p-6">
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -196,12 +263,25 @@ function App() {
               Settings
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[400px]">
+          <PopoverContent align="start" className="w-[400px]">
             <h2 className="font-semibold text-sm">Settings</h2>
             <Separator className="my-2" />
-            <div className="flex gap-2 items-center">
-              <Label className="w-24">Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            <div className="space-y-4">
+              <div className="flex gap-2 items-center">
+                <Label className="w-24">Title</Label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="show-score"
+                  checked={showScore}
+                  onCheckedChange={setShowScore}
+                />
+                <Label htmlFor="show-score">Show Score</Label>
+              </div>
             </div>
           </PopoverContent>
         </Popover>
@@ -217,8 +297,14 @@ function App() {
               Users
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[450px]">
-            <h2 className="font-semibold text-sm">Users</h2>
+          <PopoverContent align="start" className="w-[450px]">
+            <div className="flex gap-2 items-center justify-between">
+              <h2 className="font-semibold text-sm">Users</h2>
+              <Button variant="outline" size="sm" onClick={clearUsers}>
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Clear
+              </Button>
+            </div>
             <Separator className="my-2" />
             {/* File input to upload the CSV */}
             <div className="flex gap-2 items-center">
@@ -240,11 +326,13 @@ function App() {
 
             {/* Display the users list with react-window if there are users */}
             {users.length > 0 && (
-              <div className="py-6">
+              <div className="py-2">
                 <h2 className="font-semibold mb-2">
                   Users List ({users.length})
                 </h2>
-                <UserList users={users} />
+                <div className="border">
+                  <UserList users={users} />
+                </div>
               </div>
             )}
           </PopoverContent>
@@ -256,26 +344,18 @@ function App() {
           <div className="flex justify-center mt-12 h-40">
             {state === "draw" && (
               <div className="flex flex-col gap-4 items-center">
-                {/* <TextLoop animation="keyframes" timeout={200}>
-             {users.map((user) => (
-               <span key={user.id} className="text-5xl font-semibold">
-                 {user.name}
-               </span>
-             ))}
-             <p>{countdown}</p>
-           </TextLoop> */}
-                <h1 className="text-2xl">
+                <h1 className="text-xl text-center">
                   Drawing... <span className="font-bold">{countdown}</span>{" "}
                   seconds left
                 </h1>
-                <h2 className="text-5xl font-semibold">
+                <h2 className="text-4xl font-semibold text-center">
                   {users[loopIndex].name}
                 </h2>
               </div>
             )}
             {state === "idle" && (
               <Button
-                className="px-8 text-xl h-14"
+                className="px-8 text-lg h-12"
                 onClick={() => {
                   setState("draw");
                 }}
@@ -287,14 +367,22 @@ function App() {
             {state === "result" && (
               <div className="flex flex-col gap-10 items-center">
                 <Fireworks autorun={{ delay: 0.2, speed: 3, duration: 2000 }} />
-                <div className="flex gap-4 items-center flex-col">
-                  <p className="text-2xl font-semibold">The Winner is</p>
-                  <h1 className="text-5xl font-semibold">
+                <div className="flex gap-2 items-center flex-col">
+                  <p className="text-xl font-semibold text-center">
+                    The Winner is
+                  </p>
+                  <h1 className="text-4xl font-semibold text-center">
                     🎉 {winner?.name} 🎉
                   </h1>
+                  <p>{winner?.institution || "-"}</p>
+                  {showScore && (
+                    <p className="font-semibold text-center">
+                      {winner?.totalScore}
+                    </p>
+                  )}
                 </div>
                 <Button
-                  className="px-8 text-xl h-14"
+                  className="px-8 text-lg h-12"
                   onClick={() => {
                     setCountdown(5);
                     setLoopIndex(0);
@@ -309,7 +397,7 @@ function App() {
           </div>
         </div>
       </div>
-      <div className="w-[400px] border-l">
+      <div className="w-[300px] xl:w-[400px] border-l">
         <div className="flex items-center justify-between h-16 px-4">
           <h2 className="text-lg font-semibold">🎉 Winners 🎉</h2>
           <Button variant="outline" onClick={clearWinners}>
@@ -323,16 +411,28 @@ function App() {
             <p className="text-muted-foreground">No winners</p>
           </div>
         )}
-        <ul className="space-y-2 p-6">
+        <ul className="space-y-2 p-4">
           {winners.map((w, i) => (
             <li
               key={w.name}
-              className="text-lg font-semibold flex gap-3 items-center"
+              className="flex gap-3 items-center border py-2 pl-2 pr-4 bg-accent rounded-lg"
             >
-              <div className="h-8 w-8 flex items-center justify-center bg-primary text-primary-foreground rounded-lg">
+              <div className="h-10 w-10 flex items-center justify-center bg-primary text-primary-foreground rounded-lg text-lg font-semibold ">
                 {i + 1}
               </div>{" "}
-              {w.name}
+              <div className="flex items-center gap-2 flex-1">
+                <div className="flex-1">
+                  <p className="font-semibold leading-none mb-1">{w.name}</p>
+                  <p className="text-sm leading-none text-muted-foreground">
+                    {w.institution || "-"}
+                  </p>
+                </div>
+                {showScore ? (
+                  <p className="text-base font-semibold leading-none">
+                    {w.totalScore}
+                  </p>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
